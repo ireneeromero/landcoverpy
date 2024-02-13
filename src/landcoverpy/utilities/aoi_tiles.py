@@ -18,6 +18,17 @@ def get_list_of_tiles_in_iberian_peninsula():
 
    return tiles
 
+def get_list_of_tiles_in_andalucia():
+   tiles = ['30SUF'] #Malaga
+   #completa pero por ahora solo se usa Malaga
+   tiles_completa=['T29SPB', 'T29SPC', 'T29SQC', 'T29SQB', 'T29SQA', 'T30STH', 'T30STG',
+                   'T30STF', 'T30SUH', 'T30SUG', 'T30SUF', 'T30SVH', 'T30SVG', 'T30SVF',
+                   'T30SWH', 'T30SWG', 'T30SWF', 'T30SXG']
+
+   return tiles
+
+
+
 def get_list_of_tiles_in_mediterranean_basin():
    tiles = [
       '28RFQ', '28RFR', '28RFS', '28RGR', '28RGS', '29RKL', '29RKM', 
