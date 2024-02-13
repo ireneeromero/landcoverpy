@@ -258,7 +258,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 crop_mask, label_lon_lat = _mask_polygons_by_tile(polygons_in_tile, kwargs)
 
             if execution_mode==ExecutionMode.LAND_COVER_PREDICTION:
-                crop_mask = np.zeros(shape=(int(kwargs["height"]), int(kwargs["width"])),dtype=np.uint8)
+                crop_mask = np.zeros(shape=(1000, 1000),dtype=np.uint8)
 
             if execution_mode==ExecutionMode.FOREST_PREDICTION:
                 forest_mask = _get_forest_masks(tile)
@@ -270,6 +270,8 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 rescale=True,
                 normalize_range=band_normalize_range,
             )
+            print("cccccccccccccccc", raster.shape)
+            raster = raster[:,:1000,:1000]
             raster_masked = np.ma.masked_array(raster, mask=crop_mask)
             raster_masked = np.ma.compressed(raster_masked).flatten()
             raster_df = pd.DataFrame({dem_name: raster_masked})
@@ -283,7 +285,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
         crop_mask, label_lon_lat = _mask_polygons_by_tile(polygons_in_tile, kwargs)
 
     elif execution_mode==ExecutionMode.LAND_COVER_PREDICTION:
-        crop_mask = np.zeros(shape=(int(kwargs["height"]), int(kwargs["width"])), dtype=np.uint8)
+        crop_mask = np.zeros(shape=(1000, 1000), dtype=np.uint8)
 
     elif execution_mode==ExecutionMode.FOREST_PREDICTION:
         forest_mask = _get_forest_masks(tile)
@@ -395,6 +397,8 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 rescale=True,
                 normalize_range=band_normalize_range,
             )
+            print(raster.shape)
+            raster = raster[:,:1000,:1000]
             raster_masked = np.ma.masked_array(raster[0], mask=crop_mask)
             raster_masked = np.ma.compressed(raster_masked)
 
@@ -450,7 +454,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
 
         predictions[nodata_rows] = "nodata"
         predictions = np.reshape(
-            predictions, (1, kwargs_10m["height"], kwargs_10m["width"])
+            predictions, (1, 1000, 1000)
         )
         encoded_predictions = np.zeros_like(predictions, dtype=np.uint8)
 
