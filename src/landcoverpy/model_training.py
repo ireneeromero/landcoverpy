@@ -13,6 +13,11 @@ from landcoverpy.config import settings
 from landcoverpy.minio import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
+from sklearn.preprocessing import LabelEncoder
+
 
 def _feature_reduction(
     df_x: pd.DataFrame, df_y: pd.DataFrame, percentage_columns: int = 100
@@ -78,9 +83,13 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
 
     train_coordinates = unique_locations[:split_index]
     test_coordinates = unique_locations[split_index:]
+    print("test_coordinates", test_coordinates)
 
+    # Filter the coordinates for Andalusia.
+    filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
+    
     train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude'])
-    test_df = pd.merge(df, test_coordinates, on=['latitude', 'longitude'])
+    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude'])
 
     X_train = train_df[used_columns]
     X_test = test_df[used_columns]
@@ -93,6 +102,7 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     print(X_train)
     clf.fit(X_train, y_train)
     y_true = clf.predict(X_test)
+    print("y_true",y_true)
 
     labels = y_train_data.unique()
 
@@ -142,16 +152,16 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         content_type="text/json",
     )
 
-def train_model_forest(forest_dataset: str, use_open_forest: bool = False ,n_jobs: int = 2, n_trees: int = 100, max_depth: int = None, min_samples_leaf: int = 1):
-    """Trains a Random Forest model using a forest dataset."""
+def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
+    """Trains a Random Forest model using a land cover dataset."""
 
-    training_dataset_path = join(settings.TMP_DIR, forest_dataset)
+    training_dataset_path = join(settings.TMP_DIR, land_cover_dataset)
 
     minio_client = MinioConnection()
 
     minio_client.fget_object(
         bucket_name=settings.MINIO_BUCKET_DATASETS,
-        object_name=join(settings.MINIO_DATA_FOLDER_NAME, forest_dataset),
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME, land_cover_dataset),
         file_path=training_dataset_path,
     )
 
@@ -160,15 +170,7 @@ def train_model_forest(forest_dataset: str, use_open_forest: bool = False ,n_job
     df = df.fillna(np.nan)
     df = df.dropna()
 
-    minio_folder = ''
-    if use_open_forest:
-        df = df[df["class"] == "openForest"]
-        minio_folder = settings.OPEN_FOREST_MODEL_FOLDER
-    else:
-        df = df[df["class"] != "openForest"]
-        minio_folder = settings.DENSE_FOREST_MODEL_FOLDER
-
-    y_train_data = df["forest_type"]
+    y_train_data = df["class"]
     x_train_data = df.drop(
         [
             "class",
@@ -177,30 +179,66 @@ def train_model_forest(forest_dataset: str, use_open_forest: bool = False ,n_job
             "spring_product_name",
             "autumn_product_name",
             "summer_product_name",
-            "forest_type",
         ],
         axis=1,
     )
 
     used_columns = _feature_reduction(x_train_data, y_train_data)
+    
+    unique_locations = df.drop_duplicates(subset=["latitude","longitude"])
+    unique_locations = unique_locations[['latitude', 'longitude']]
 
-    reduced_x_train_data = df[used_columns]
-    X_train, X_test, y_train, y_test = train_test_split(
-        reduced_x_train_data, y_train_data, test_size=0.15
-    )
+    unique_locations = unique_locations.sample(frac=1).reset_index(drop=True)
+
+    train_size = 0.85
+
+    split_index = int(len(unique_locations) * train_size)
+
+    train_coordinates = unique_locations[:split_index]
+    test_coordinates = unique_locations[split_index:]
+    print("test_coordinates", test_coordinates)
+
+    # Filter the coordinates for Andalusia.
+    filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
+    
+    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude'])
+    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude'])
+
+    
+
+    X_train = train_df[used_columns]
+    X_test = test_df[used_columns]
+    y_train = train_df['class']
+    y_test = test_df['class']
+
+    label_encoder_train = LabelEncoder()
+    y_train = label_encoder_train.fit_transform(y_train)
 
     # Train model
-    clf = RandomForestClassifier(n_jobs=n_jobs, n_estimators=n_trees, max_depth=max_depth, min_samples_leaf=min_samples_leaf)
+    model = Sequential()
+    model.add(Dense(64, activation='relu', input_shape=(X_train.shape[1],)))
+    model.add(Dense(64, activation='relu'))
+    model.add(Dense(9, activation='softmax'))
+
+    model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',  # Usar 'sparse_categorical_crossentropy' si las etiquetas son enteros
+              metrics=['accuracy'])
     X_train = X_train.reindex(columns=used_columns)
-    print(X_train)
-    clf.fit(X_train, y_train)
-    y_true = clf.predict(X_test)
+    model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
+    y_pred_encoded = model.predict(X_test)
+    y_true = label_encoder_train.inverse_transform(np.argmax(y_pred_encoded, axis=1))
+
+    print("y_true",y_true)
+
+
 
     labels = y_train_data.unique()
 
     confusion_image_filename = "confusion_matrix.png"
     out_image_path = join(settings.TMP_DIR, confusion_image_filename)
     compute_confusion_matrix(y_true, y_test, labels, out_image_path=out_image_path)
+
+    minio_folder = settings.LAND_COVER_MODEL_FOLDER
 
     # Save confusion matrix image to minio
     minio_client.fput_object(
@@ -210,30 +248,25 @@ def train_model_forest(forest_dataset: str, use_open_forest: bool = False ,n_job
         content_type="image/png",
     )
 
-    model_name = "model.joblib"
+    model_name = "model.h5"
     model_path = join(settings.TMP_DIR, model_name)
-    joblib.dump(clf, model_path)
-    clf = joblib.load(model_path)
-    print([estimator.get_n_leaves() for estimator in clf.estimators_])
-    print([estimator.get_depth() for estimator in clf.estimators_])
+    model.save(model_path)
 
     # Save model to minio
     minio_client.fput_object(
         bucket_name=settings.MINIO_BUCKET_MODELS,
         object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_folder}/{model_name}",
         file_path=model_path,
-        content_type="mlmodel/randomforest",
+        content_type="mlmodel/dnn",
     )
 
     model_metadata = {
-        "model": str(type(clf)),
+        "model": str(type(model)),
         "n_jobs": n_jobs,
-        "n_estimators": n_trees,
-        "max_depth": max_depth,
-        "min_samples_leaf": min_samples_leaf,
         "used_columns": list(used_columns),
         "classes": list(labels)
     }
+
     model_metadata_name = "metadata.json"
     model_metadata_path = join(settings.TMP_DIR, model_metadata_name)
 
@@ -246,3 +279,4 @@ def train_model_forest(forest_dataset: str, use_open_forest: bool = False ,n_job
         file_path=model_metadata_path,
         content_type="text/json",
     )
+

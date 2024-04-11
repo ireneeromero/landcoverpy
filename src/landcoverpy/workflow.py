@@ -37,11 +37,12 @@ from landcoverpy.utilities.utils import (
     get_products_by_tile_and_date,
     get_season_dict,
 )
-
+from tensorflow.keras.models import load_model
 
 def workflow(execution_mode: ExecutionMode, client: Client = None, tiles_to_predict: List[str] = None):
 
     predict = execution_mode != ExecutionMode.TRAINING
+    print("Predict", predict)
 
     minio = MinioConnection()
 
@@ -110,6 +111,7 @@ def workflow(execution_mode: ExecutionMode, client: Client = None, tiles_to_pred
 
     else:
         if execution_mode != ExecutionMode.FOREST_PREDICTION:
+            print("ESTOY AQUIIIII")
             for tile in tiles:
                 try:
                     _process_tile(tile, execution_mode, polygons_per_tile[tile], used_columns)
@@ -130,6 +132,7 @@ def workflow(execution_mode: ExecutionMode, client: Client = None, tiles_to_pred
 
     if not predict:
         # Merge all tiles datasets into a big dataset.csv, then upload it to minio
+        
 
         final_df = None
 
@@ -258,7 +261,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 crop_mask, label_lon_lat = _mask_polygons_by_tile(polygons_in_tile, kwargs)
 
             if execution_mode==ExecutionMode.LAND_COVER_PREDICTION:
-                crop_mask = np.zeros(shape=(1000, 1000),dtype=np.uint8)
+                crop_mask = np.zeros(shape=(int(kwargs["height"]), int(kwargs["width"])),dtype=np.uint8)
 
             if execution_mode==ExecutionMode.FOREST_PREDICTION:
                 forest_mask = _get_forest_masks(tile)
@@ -270,8 +273,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 rescale=True,
                 normalize_range=band_normalize_range,
             )
-            print("cccccccccccccccc", raster.shape)
-            raster = raster[:,:1000,:1000]
+
             raster_masked = np.ma.masked_array(raster, mask=crop_mask)
             raster_masked = np.ma.compressed(raster_masked).flatten()
             raster_df = pd.DataFrame({dem_name: raster_masked})
@@ -285,7 +287,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
         crop_mask, label_lon_lat = _mask_polygons_by_tile(polygons_in_tile, kwargs)
 
     elif execution_mode==ExecutionMode.LAND_COVER_PREDICTION:
-        crop_mask = np.zeros(shape=(1000, 1000), dtype=np.uint8)
+        crop_mask = np.zeros(shape=(int(kwargs["height"]), int(kwargs["width"])), dtype=np.uint8)
 
     elif execution_mode==ExecutionMode.FOREST_PREDICTION:
         forest_mask = _get_forest_masks(tile)
@@ -398,7 +400,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
                 normalize_range=band_normalize_range,
             )
             print(raster.shape)
-            raster = raster[:,:1000,:1000]
+            #raster = raster[:,:1000,:1000]
             raster_masked = np.ma.masked_array(raster[0], mask=crop_mask)
             raster_masked = np.ma.compressed(raster_masked)
 
@@ -433,6 +435,11 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
     if execution_mode == ExecutionMode.LAND_COVER_PREDICTION:
 
         model_name = "model.joblib"
+
+        #para redes neuronales
+        model_name = "model.h5"
+
+
         minio_model_folder = settings.LAND_COVER_MODEL_FOLDER
         model_path = join(settings.TMP_DIR, minio_model_folder, model_name)
 
@@ -448,13 +455,19 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
         for column in used_columns:
             tile_df[column] = tile_df.pop(column).replace([np.inf, -np.inf, -np.nan], 0)
 
-        clf = joblib.load(model_path)
+        #clf = joblib.load(model_path)
 
-        predictions = clf.predict(tile_df)
+        #predictions = clf.predict(tile_df)
 
-        predictions[nodata_rows] = "nodata"
+        #para redes nueuronales
+        model = load_model(model_path)
+
+        predictions = model.predict(tile_df)
+        print(predictions)
+
+        #predictions[nodata_rows] = "nodata"
         predictions = np.reshape(
-            predictions, (1, 1000, 1000)
+            predictions, (1, kwargs_10m["height"], kwargs_10m["width"])
         )
         encoded_predictions = np.zeros_like(predictions, dtype=np.uint8)
 
