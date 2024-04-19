@@ -204,15 +204,35 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude'])
     test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude'])
 
-    
-
     X_train = train_df[used_columns]
     X_test = test_df[used_columns]
     y_train = train_df['class']
     y_test = test_df['class']
 
+    conteo_valores = y_train.value_counts()
+    print("Conteo de valores:")
+    print(conteo_valores)
+
+
+
+    mapping = {
+    "builtUp": 1,
+    "herbaceousVegetation": 2,
+    "shrubland": 3,
+    "water": 4,
+    "wetland": 5,
+    "cropland": 6,
+    "closedForest": 7,
+    "openForest": 8,
+    "bareSoil": 9
+    }
+
+    y_train_mapped = [mapping[label] for label in y_train]
+
+
     label_encoder_train = LabelEncoder()
-    y_train = label_encoder_train.fit_transform(y_train)
+    y_train = label_encoder_train.fit_transform(y_train_mapped)
+ 
 
     # Train model
     model = Sequential()
@@ -226,11 +246,13 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     X_train = X_train.reindex(columns=used_columns)
     model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
     y_pred_encoded = model.predict(X_test)
-    y_true = label_encoder_train.inverse_transform(np.argmax(y_pred_encoded, axis=1))
-
-    print("y_true",y_true)
+    y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 
 
+    # Invertir el proceso de codificación utilizando el codificador de etiquetas inverso
+    y_pred = label_encoder_train.inverse_transform(y_pred_indices)
+    # Get y_pred label names
+    y_true = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
 
     labels = y_train_data.unique()
 
@@ -259,6 +281,8 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         file_path=model_path,
         content_type="mlmodel/dnn",
     )
+
+
 
     model_metadata = {
         "model": str(type(model)),

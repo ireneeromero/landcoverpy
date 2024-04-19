@@ -433,8 +433,8 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
     print(tile_df.info())
 
     if execution_mode == ExecutionMode.LAND_COVER_PREDICTION:
-
-        model_name = "model.joblib"
+        #tile_df = tile_df.iloc[:100]
+        #model_name = "model.joblib"
 
         #para redes neuronales
         model_name = "model.h5"
@@ -450,43 +450,35 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
         )
 
         nodata_rows = (~np.isfinite(tile_df)).any(axis=1)
+       
 
         # Low memory column reindex without copy taken from https://stackoverflow.com/questions/25878198/change-pandas-dataframe-column-order-in-place
         for column in used_columns:
             tile_df[column] = tile_df.pop(column).replace([np.inf, -np.inf, -np.nan], 0)
 
         #clf = joblib.load(model_path)
-
+        
         #predictions = clf.predict(tile_df)
-
+        print(tile_df.shape)
         #para redes nueuronales
         model = load_model(model_path)
-
+        model.compile()
+        print("modelo cargado", model)
         predictions = model.predict(tile_df)
-        print(predictions)
+        predictions = np.array([np.argmax(pred) + 1 for pred in predictions])
+        #print("predictions", predictions[:100])
 
-        #predictions[nodata_rows] = "nodata"
+        
+        # indice_nodata = np.where(nodata_rows)[0]
+        # indice_nodata = [0, 1, 2]
+        #print("indice_nodata", indice_nodata)
+        predictions[nodata_rows] = 0
+        #print("predictions no data ", predictions)
         predictions = np.reshape(
             predictions, (1, kwargs_10m["height"], kwargs_10m["width"])
         )
-        encoded_predictions = np.zeros_like(predictions, dtype=np.uint8)
-
-        mapping = {
-            "nodata": 0,
-            "builtUp": 1,
-            "herbaceousVegetation": 2,
-            "shrubland": 3,
-            "water": 4,
-            "wetland": 5,
-            "cropland": 6,
-            "closedForest": 7,
-            "openForest": 8,
-            "bareSoil": 9
-        }
-        for class_, value in mapping.items():
-            encoded_predictions = np.where(
-                predictions == class_, value, encoded_predictions
-            )
+        
+        
 
         kwargs_10m["nodata"] = 0
         kwargs_10m["driver"] = "GTiff"
@@ -496,7 +488,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
         with rasterio.open(
             classification_path, "w", **kwargs_10m
         ) as classification_file:
-            classification_file.write(encoded_predictions)
+            classification_file.write(predictions)
         print(f"{classification_name} saved")
 
         minio_client.fput_object(
@@ -506,127 +498,7 @@ def _process_tile(tile, execution_mode, polygons_in_tile, used_columns=None):
             content_type="image/tif",
         )
 
-    elif execution_mode == ExecutionMode.FOREST_PREDICTION:
-
-        model_name = "model.joblib"
-        minio_models_folders_open = settings.OPEN_FOREST_MODEL_FOLDER
-        minio_models_folders_dense = settings.DENSE_FOREST_MODEL_FOLDER
-
-        for minio_model_folder in [minio_models_folders_open, minio_models_folders_dense]:
-
-            minio_client.fget_object(
-                bucket_name=settings.MINIO_BUCKET_MODELS,
-                object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_model_folder}/{model_name}",
-                file_path=join(settings.TMP_DIR, minio_model_folder, model_name),
-            )
-
-
-        nodata_rows = (~np.isfinite(tile_df)).any(axis=1)
-
-        for column in used_columns:
-            tile_df[column] = tile_df.pop(column).replace([np.inf, -np.inf, -np.nan], 0)
-
-        clf_open_forest = joblib.load(join(settings.TMP_DIR, minio_models_folders_open, model_name))
-        clf_dense_forest = joblib.load(join(settings.TMP_DIR, minio_models_folders_dense, model_name))
-
-        predictions_open = clf_open_forest.predict(tile_df)
-        predictions_dense = clf_dense_forest.predict(tile_df)
-
-        forest_type_vector = forest_mask.flatten()
-
-        predictions = np.where(forest_type_vector==1, "D - " + predictions_dense, "noforest")
-        predictions = np.where(forest_type_vector==2, "O - " + predictions_open, predictions)
-
-        predictions[nodata_rows] = "nodata"
-
-        predictions = np.reshape(
-            predictions, (1, kwargs_10m["height"], kwargs_10m["width"])
-        )
-        encoded_predictions = np.zeros_like(predictions, dtype=np.uint8)
-
-        mapping = {
-            'nodata': 0,
-            'noforest': 1,
-            'O - Acebuchales (Olea europaea var. Sylvestris)': 101,
-            'O - Encinares (Quercus ilex)': 102,
-            'O - Enebrales (Juniperus spp.)': 103,
-            'O - Melojares (Quercus pyrenaica)': 104,
-            'O - Mezcla de coníferas y frondosas': 105,
-            'O - Otras coníferas': 106,
-            'O - Otras frondosas': 107,
-            'O - Pinar de pino albar (Pinus sylvestris)': 108,
-            'O - Pinar de pino carrasco (Pinus halepensis)': 109,
-            'O - Pinar de pino negro (Pinus uncinata)': 110,
-            'O - Pinar de pino piñonero (Pinus pinea)': 111,
-            'O - Pinar de pino salgareño (Pinus nigra)': 112,
-            'O - Pinares de pino pinaster': 113,
-            'O - Quejigares (Quercus faginea)': 114,
-            'O - Robledales de Q. robur y/o Q. petraea': 115,
-            'O - Robledales de roble pubescente (Quercus humilis)': 116,
-            'O - Sabinares albares (Juniperus thurifera)': 117,
-            'O - Sabinares de Juniperus phoenicea': 118,
-            'D - Plantacion - Choperas y plataneras de producción': 201,
-            'D - Plantacion - Eucaliptales': 202,
-            'D - Plantacion - Otras coníferas alóctonas de producción (Larix spp.: Pseudotsuga spp.: etc)': 203,
-            'D - Plantacion - Otras especies de producción en mezcla': 204,
-            'D - Plantacion - Pinar de pino albar (Pinus sylvestris)': 205,
-            'D - Plantacion - Pinar de pino carrasco (Pinus halepensis)': 206,
-            'D - Plantacion - Pinar de pino piñonero (Pinus pinea)': 207,
-            'D - Plantacion - Pinar de pino radiata': 208,
-            'D - Plantacion - Pinar de pino salgareño (Pinus nigra)': 209,
-            'D - Plantacion - Pinares de pino pinaster': 210,
-            'D - Abedulares (Betula spp.)': 211,
-            'D - Abetales (Abies alba)': 212,
-            'D - Acebedas (Ilex aquifolium)': 213,
-            'D - Acebuchales (Olea europaea var. Sylvestris)': 214,
-            'D - Alcornocales (Quercus suber)': 215,
-            'D - Avellanedas (Corylus avellana)': 216,
-            'D - Bosque ribereño': 217,
-            'D - Castañares (Castanea sativa)': 218,
-            'D - Encinares (Quercus ilex)': 219,
-            'D - Fresnedas (Fraxinus spp.)': 220,
-            'D - Hayedos (Fagus sylvatica)': 221,
-            'D - Madroñales (Arbutus unedo)': 222,
-            'D - Melojares (Quercus pyrenaica)': 223,
-            'D - Mezcla de coníferas y frondosas': 224,
-            'D - Pinar de pino albar (Pinus sylvestris)': 225,
-            'D - Pinar de pino canario (Pinus canariensis)': 226,
-            'D - Pinar de pino carrasco (Pinus halepensis)': 227,
-            'D - Pinar de pino negro (Pinus uncinata)': 228,
-            'D - Pinar de pino piñonero (Pinus pinea)': 229,
-            'D - Pinar de pino radiata': 230,
-            'D - Pinar de pino salgareño (Pinus nigra)': 231,
-            'D - Pinares de pino pinaster': 232,
-            'D - Pinsapares (Abies pinsapo)': 233,
-            'D - Quejigares (Quercus faginea)': 234,
-            'D - Quejigares de Quercus canariensis': 235,
-            'D - Robledales de Q. robur y/o Q. petraea': 236,
-            'D - Robledales de roble pubescente (Quercus humilis)': 237
-        }
-
-        for class_, value in mapping.items():
-            encoded_predictions = np.where(
-                predictions == class_, value, encoded_predictions
-            )
-
-        kwargs_10m["nodata"] = 0
-        kwargs_10m["driver"] = "GTiff"
-        kwargs_10m["dtype"] = np.uint8
-        classification_name = f"forest_classification_{tile}.tif"
-        classification_path = str(Path(settings.TMP_DIR, classification_name))
-        with rasterio.open(
-            classification_path, "w", **kwargs_10m
-        ) as classification_file:
-            classification_file.write(encoded_predictions)
-        print(f"{classification_name} saved")
-
-        minio_client.fput_object(
-            bucket_name=settings.MINIO_BUCKET_CLASSIFICATIONS,
-            object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{classification_name}",
-            file_path=classification_path,
-            content_type="image/tif",
-        )
-
+    
     for path in Path(settings.TMP_DIR).glob("**/*"):
         if path.is_file():
             path.unlink()
