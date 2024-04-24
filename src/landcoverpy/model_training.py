@@ -15,7 +15,6 @@ from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 
 
@@ -106,7 +105,7 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
 
     labels = y_train_data.unique()
 
-    confusion_image_filename = "confusion_matrix.png"
+    confusion_image_filename = "confusion_matrix_RF.png"
     out_image_path = join(settings.TMP_DIR, confusion_image_filename)
     compute_confusion_matrix(y_true, y_test, labels, out_image_path=out_image_path)
 
@@ -120,7 +119,7 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         content_type="image/png",
     )
 
-    model_name = "model.joblib"
+    model_name = "model_RF.joblib"
     model_path = join(settings.TMP_DIR, model_name)
     joblib.dump(clf, model_path)
 
@@ -139,7 +138,7 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         "classes": list(labels)
     }
 
-    model_metadata_name = "metadata.json"
+    model_metadata_name = "metadata_RF.json"
     model_metadata_path = join(settings.TMP_DIR, model_metadata_name)
 
     with open(model_metadata_path, "w") as f:
@@ -209,10 +208,6 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     y_train = train_df['class']
     y_test = test_df['class']
 
-    conteo_valores = y_train.value_counts()
-    print("Conteo de valores:")
-    print(conteo_valores)
-
 
 
     mapping = {
@@ -244,13 +239,14 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
               loss='sparse_categorical_crossentropy',  # Usar 'sparse_categorical_crossentropy' si las etiquetas son enteros
               metrics=['accuracy'])
     X_train = X_train.reindex(columns=used_columns)
+    
     model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
     y_pred_encoded = model.predict(X_test)
     y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 
-
     # Invertir el proceso de codificación utilizando el codificador de etiquetas inverso
     y_pred = label_encoder_train.inverse_transform(y_pred_indices)
+  
     # Get y_pred label names
     y_true = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
 
