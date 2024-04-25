@@ -4,8 +4,9 @@ from jmetal.operator.mutation import IntegerPolynomialMutation
 from jmetal.operator.crossover import IntegerSBXCrossover
 from jmetal.util.solution import print_function_values_to_file, print_variables_to_file
 from jmetal.util.termination_criterion import StoppingByEvaluations
-
+from jmetal.util.evaluator import MultiprocessEvaluator
 from sklearn.preprocessing import LabelEncoder 
+from jmetal.util.observer import PrintObjectivesObserver
 
 from landcoverpy.evolutive_algorithm import NeuralNetworkOptimizer
 from landcoverpy.minio_func import MinioConnection
@@ -93,19 +94,24 @@ if __name__ == "__main__":
 
 
     problem = NeuralNetworkOptimizer(X_train, X_test, y_train, y_test)
-    print("problem.number_of_variables", problem.number_of_variables)
+    print("problem.number_of_variables", problem.number_of_variables())
 
     max_evaluations = 10000
 
     algorithm = NSGAII(
+        population_evaluator=MultiprocessEvaluator(8),
         problem=problem,
         population_size=100,
         offspring_population_size=100,
-        mutation=IntegerPolynomialMutation(probability=1.0 / 7, distribution_index=0.20),
-        crossover=IntegerSBXCrossover(probability=1.0, distribution_index=0.20),
+        mutation=IntegerPolynomialMutation(probability=1.0 / 7, distribution_index=20),
+        crossover=IntegerSBXCrossover(probability=1.0, distribution_index=20),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
+    
+    
+    algorithm.observable.register(observer=PrintObjectivesObserver(max_evaluations))
+    
     algorithm.run()
     front = algorithm.get_result()
 

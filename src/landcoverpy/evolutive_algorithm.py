@@ -39,7 +39,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         x7 = Inicialización de pesos: 0: 'He', 1: 'Glorot', 2: 'uniform'
         """
         self.lower_bound = [0, 3, 0, 1, 0, 0, 0]
-        self.upper_bound = [10, 64, 2, 1000, 2, 2, 2] 
+        self.upper_bound = [10, 64, 2, 100, 2, 2, 2] 
 
         
         self.obj_directions = [self.MAXIMIZE, self.MAXIMIZE, self.MAXIMIZE]
@@ -55,6 +55,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         return len(self.lower_bound)
 
     def evaluate(self, solution: IntegerSolution) -> IntegerSolution:
+
         n_layers = solution.variables[0]
         n_neurons = solution.variables[1]
         activation_index = solution.variables[2]
@@ -101,6 +102,14 @@ class NeuralNetworkOptimizer(IntegerProblem):
             optimizer = SGD(learning_rate=learning_rate)
         elif optimization == 2:
             optimizer = RMSprop(learning_rate=learning_rate)
+        
+        print("Optimizer", optimizer)
+        print("regularization", regularization)
+        print("activation_func", activation_func)
+        print("initializer", initializer)
+        print("n_layer", n_layers)
+        print("n_neurons", n_neurons)
+        print("learning_rate", learning_rate)
 
         
         model = Sequential()
@@ -115,6 +124,21 @@ class NeuralNetworkOptimizer(IntegerProblem):
             if regularization == 'dropout':
                 model.add(Dropout(0.5)) 
 
+        # for _ in range(n_layers):
+        #     if regularization == 'dropout':
+        #         model.add(Dropout(0.5, input_shape=(self.X_train.shape[1],)))
+        #     model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
+        #     if not isinstance(regularization, str):
+        #         model.add(Dense(n_neurons, kernel_regularizer=regularization))
+
+        # Capa de salida
+        model.add(Dense(9, activation='softmax'))
+        
+        model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        
+        model.summary()
+        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
+
 
         mapping = {
             "builtUp": 1,
@@ -128,14 +152,6 @@ class NeuralNetworkOptimizer(IntegerProblem):
             "bareSoil": 9
             }
 
-        
-        # Capa de salida
-        model.add(Dense(9, activation='softmax'))
-        
-        model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        
-
-        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
 
         y_pred_encoded = model.predict(X_test)
         

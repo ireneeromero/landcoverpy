@@ -168,6 +168,7 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.fillna(np.nan)
     df = df.dropna()
+    print("ddddd",len(df))
 
     y_train_data = df["class"]
     x_train_data = df.drop(
@@ -183,25 +184,34 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     )
 
     used_columns = _feature_reduction(x_train_data, y_train_data)
-    
-    unique_locations = df.drop_duplicates(subset=["latitude","longitude"])
-    unique_locations = unique_locations[['latitude', 'longitude']]
 
-    unique_locations = unique_locations.sample(frac=1).reset_index(drop=True)
 
-    train_size = 0.85
 
-    split_index = int(len(unique_locations) * train_size)
 
-    train_coordinates = unique_locations[:split_index]
-    test_coordinates = unique_locations[split_index:]
-    print("test_coordinates", test_coordinates)
+    unique_locations_with_class = df[['latitude', 'longitude', 'class']].drop_duplicates()
+    train_dfs = []
+    test_dfs = []
+    for class_label in unique_locations_with_class['class'].unique():
+
+        class_locations = unique_locations_with_class[unique_locations_with_class['class'] == class_label]
+        class_locations = class_locations.sample(frac=1).reset_index(drop=True)
+        
+        split_point = int(len(class_locations) * 0.85)
+        
+        train_locations = class_locations.iloc[:split_point]
+        test_locations = class_locations.iloc[split_point:]
+        
+        train_dfs.append(train_locations)
+        test_dfs.append(test_locations)
+
+    train_coordinates = pd.concat(train_dfs).reset_index(drop=True)
+    test_coordinates = pd.concat(test_dfs).reset_index(drop=True)
 
     # Filter the coordinates for Andalusia.
     filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
-    
-    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude'])
-    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude'])
+
+    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude', 'class'])
+    test_df = pd.merge(df, test_coordinates, on=['latitude', 'longitude', 'class'])
 
     X_train = train_df[used_columns]
     X_test = test_df[used_columns]
@@ -236,7 +246,7 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     model.add(Dense(9, activation='softmax'))
 
     model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',  # Usar 'sparse_categorical_crossentropy' si las etiquetas son enteros
+              loss='sparse_categorical_crossentropy',  # Use 'sparse_categorical_crossentropy' if the labels are integers
               metrics=['accuracy'])
     X_train = X_train.reindex(columns=used_columns)
     
@@ -244,7 +254,7 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     y_pred_encoded = model.predict(X_test)
     y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 
-    # Invertir el proceso de codificación utilizando el codificador de etiquetas inverso
+    # Reverse the encoding process using the reverse label encoder
     y_pred = label_encoder_train.inverse_transform(y_pred_indices)
   
     # Get y_pred label names
@@ -266,37 +276,37 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         content_type="image/png",
     )
 
-    model_name = "model.h5"
-    model_path = join(settings.TMP_DIR, model_name)
-    model.save(model_path)
+    # model_name = "model.h5"
+    # model_path = join(settings.TMP_DIR, model_name)
+    # model.save(model_path)
 
-    # Save model to minio
-    minio_client.fput_object(
-        bucket_name=settings.MINIO_BUCKET_MODELS,
-        object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_folder}/{model_name}",
-        file_path=model_path,
-        content_type="mlmodel/dnn",
-    )
+    # # Save model to minio
+    # minio_client.fput_object(
+    #     bucket_name=settings.MINIO_BUCKET_MODELS,
+    #     object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_folder}/{model_name}",
+    #     file_path=model_path,
+    #     content_type="mlmodel/dnn",
+    # )
 
 
 
-    model_metadata = {
-        "model": str(type(model)),
-        "n_jobs": n_jobs,
-        "used_columns": list(used_columns),
-        "classes": list(labels)
-    }
+    # model_metadata = {
+    #     "model": str(type(model)),
+    #     "n_jobs": n_jobs,
+    #     "used_columns": list(used_columns),
+    #     "classes": list(labels)
+    # }
 
-    model_metadata_name = "metadata.json"
-    model_metadata_path = join(settings.TMP_DIR, model_metadata_name)
+    # model_metadata_name = "metadata.json"
+    # model_metadata_path = join(settings.TMP_DIR, model_metadata_name)
 
-    with open(model_metadata_path, "w") as f:
-        json.dump(model_metadata, f)
+    # with open(model_metadata_path, "w") as f:
+    #     json.dump(model_metadata, f)
 
-    minio_client.fput_object(
-        bucket_name=settings.MINIO_BUCKET_MODELS,
-        object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_folder}/{model_metadata_name}",
-        file_path=model_metadata_path,
-        content_type="text/json",
-    )
+    # minio_client.fput_object(
+    #     bucket_name=settings.MINIO_BUCKET_MODELS,
+    #     object_name=f"{settings.MINIO_DATA_FOLDER_NAME}/{minio_folder}/{model_metadata_name}",
+    #     file_path=model_metadata_path,
+    #     content_type="text/json",
+    # )
 
