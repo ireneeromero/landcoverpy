@@ -15,7 +15,7 @@ from shapely.ops import transform
 from sklearn.decomposition import PCA
 
 from landcoverpy.config import settings
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.raster import (
     _get_product_rasters_paths,
     _get_raster_filename_from_path,

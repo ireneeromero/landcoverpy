@@ -15,7 +15,7 @@ from shapely.ops import transform
 from landcoverpy.config import settings
 from landcoverpy.exceptions import NoSentinelException
 from landcoverpy.execution_mode import ExecutionMode
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.rasterpoint import RasterPoint
 from landcoverpy.utilities.geometries import (
     _convert_3D_2D,

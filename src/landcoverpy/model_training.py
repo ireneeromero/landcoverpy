@@ -10,7 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
 from landcoverpy.config import settings
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 
 from tensorflow.keras.models import Sequential

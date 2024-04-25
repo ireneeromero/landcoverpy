@@ -17,7 +17,7 @@ from landcoverpy.composite import _create_composite, _get_composite
 from landcoverpy.config import settings
 from landcoverpy.exceptions import WorkflowExecutionException, NoSentinelException
 from landcoverpy.execution_mode import ExecutionMode
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.mongo import MongoConnection
 from landcoverpy.utilities.geometries import _group_polygons_by_tile, _kmz_to_geojson
 from landcoverpy.utilities.raster import (

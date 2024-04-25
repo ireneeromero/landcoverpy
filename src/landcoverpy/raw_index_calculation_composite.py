@@ -4,7 +4,7 @@ from pathlib import Path
 from greensenti.band_arithmetic import *
 
 from landcoverpy.config import settings
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.mongo import MongoConnection
 
 

@@ -2,7 +2,7 @@ import random
 import numpy as np
 from jmetal.core.problem import IntegerProblem
 from jmetal.core.solution import IntegerSolution
-from landcoverpy.minio import MinioConnection
+
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
@@ -12,12 +12,13 @@ from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.metrics import Precision, Recall
 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 
 
 
 class NeuralNetworkOptimizer(IntegerProblem):
-    def __init__(self, X_train, X_test, y_train, y_test):
+    def __init__(self, X_train, X_test, y_train, y_test, number_of_variables: int = 7):
         super(NeuralNetworkOptimizer, self).__init__()
         self.X_train = X_train
         self.X_test = X_test
@@ -50,6 +51,9 @@ class NeuralNetworkOptimizer(IntegerProblem):
     def number_of_constraints(self) -> int:
         return 0
 
+    def number_of_variables(self) -> int:
+        return len(self.lower_bound)
+
     def evaluate(self, solution: IntegerSolution) -> IntegerSolution:
         n_layers = solution.variables[0]
         n_neurons = solution.variables[1]
@@ -58,6 +62,11 @@ class NeuralNetworkOptimizer(IntegerProblem):
         optimization = solution.variables[4]
         regularization_index = solution.variables[5]
         weight_initialization = solution.variables[6]
+
+        X_train = self.X_train
+        X_test = self.X_test
+        y_train = self.y_train
+        y_test = self.y_test
 
 
         # Inicialización de pesos
@@ -96,36 +105,53 @@ class NeuralNetworkOptimizer(IntegerProblem):
         
         model = Sequential()
         if regularization == 'dropout':
-            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, input_shape=(input_shape,)))
+            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, input_shape=(X_train.shape[1],)))
         else:
-            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization, input_shape=(input_shape,)))
+            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization, input_shape=(X_train.shape[1],)))
 
         
         for _ in range(n_layers - 1):
             model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
             if regularization == 'dropout':
                 model.add(Dropout(0.5)) 
+
+
+        mapping = {
+            "builtUp": 1,
+            "herbaceousVegetation": 2,
+            "shrubland": 3,
+            "water": 4,
+            "wetland": 5,
+            "cropland": 6,
+            "closedForest": 7,
+            "openForest": 8,
+            "bareSoil": 9
+            }
+
         
         # Capa de salida
         model.add(Dense(9, activation='softmax'))
         
-        model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy', Precision(), Recall()])
+        model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         
 
         model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
 
         y_pred_encoded = model.predict(X_test)
-        y_pred_indices = np.argmax(y_pred_encoded, axis=1)
+        
+        y_pred = np.array([np.argmax(pred) + 1 for pred in y_pred_encoded])
+        y_pred = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
+        
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred, average='macro') 
+        recall = recall_score(y_test, y_pred, average='macro')
 
-        # Invertir el proceso de codificación utilizando el codificador de etiquetas inverso
-        y_pred = label_encoder_train.inverse_transform(y_pred_indices)
-        # Get y_pred label names
-        y_true = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
-
+        print("accuracy", accuracy)
+        print("precision", precision)
+        print("recall", recall)
         
         
-        
-        solution.objectives[0] = acc
+        solution.objectives[0] = accuracy
         solution.objectives[1] = precision
         solution.objectives[2] = recall
 
@@ -135,9 +161,4 @@ class NeuralNetworkOptimizer(IntegerProblem):
     def name(self):
         return "NeuralNetworkOptimizer"
 
- 
-    def train_and_evaluate(self, model):
-        x_train, y_train, x_val, y_val = self.dataset.get_data()
-        model.fit(x_train, y_train, epochs=10, verbose=0)
-        loss, _ = model.evaluate(x_val, y_val, verbose=0)
-        return loss
+

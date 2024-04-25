@@ -1,14 +1,18 @@
+from os.path import join
 from jmetal.algorithm.multiobjective.nsgaii import NSGAII
-from jmetal.operator import IntegerPolynomialMutation, IntegerSBXCrossover
+from jmetal.operator.mutation import IntegerPolynomialMutation
+from jmetal.operator.crossover import IntegerSBXCrossover
 from jmetal.util.solution import print_function_values_to_file, print_variables_to_file
 from jmetal.util.termination_criterion import StoppingByEvaluations
 
 from sklearn.preprocessing import LabelEncoder 
 
 from landcoverpy.evolutive_algorithm import NeuralNetworkOptimizer
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.config import settings
-from landcoverpy.minio import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
+import pandas as pd
+import numpy as np
 
 
 if __name__ == "__main__":
@@ -42,7 +46,7 @@ if __name__ == "__main__":
         axis=1,
     )
 
-    used_columns = _feature_reduction(x_train_data, y_train_data)
+    used_columns = x_train_data.columns.tolist()
     
     unique_locations = df.drop_duplicates(subset=["latitude","longitude"])
     unique_locations = unique_locations[['latitude', 'longitude']]
@@ -89,25 +93,26 @@ if __name__ == "__main__":
 
 
     problem = NeuralNetworkOptimizer(X_train, X_test, y_train, y_test)
+    print("problem.number_of_variables", problem.number_of_variables)
 
-    max_evaluations = 100
+    max_evaluations = 10000
 
     algorithm = NSGAII(
         problem=problem,
-        population_size=10,
-        offspring_population_size=10,
-        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables, distribution_index=0.20),
+        population_size=100,
+        offspring_population_size=100,
+        mutation=IntegerPolynomialMutation(probability=1.0 / 7, distribution_index=0.20),
         crossover=IntegerSBXCrossover(probability=1.0, distribution_index=0.20),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
     algorithm.run()
-    front = algorithm.result()
+    front = algorithm.get_result()
 
     # Save results to file
     print_function_values_to_file(front, "FUN." + algorithm.label)
     print_variables_to_file(front, "VAR." + algorithm.label)
 
     print(f"Algorithm: {algorithm.get_name()}")
-    print(f"Problem: {problem.get_name()}")
+    print(f"Problem: {problem.name()}")
     print(f"Computing time: {algorithm.total_computing_time}")

@@ -12,7 +12,7 @@ from scipy.ndimage import convolve
 from landcoverpy import raw_index_calculation_composite
 from landcoverpy.config import settings
 from landcoverpy.execution_mode import ExecutionMode
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.raster import (
     _get_kwargs_raster,
     _get_product_rasters_paths,

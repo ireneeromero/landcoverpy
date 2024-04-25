@@ -7,7 +7,7 @@ import seaborn as sns
 from matplotlib import pyplot
 
 from landcoverpy.config import settings
-from landcoverpy.minio import MinioConnection
+from landcoverpy.minio_func import MinioConnection
 
 
 def _plot_dataset(
