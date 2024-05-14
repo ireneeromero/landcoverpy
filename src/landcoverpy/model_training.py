@@ -313,7 +313,8 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         
     X_train = X_train.reindex(columns=used_columns)
     
-    model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
+    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
     y_pred_encoded = model.predict(X_test)
     y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 
