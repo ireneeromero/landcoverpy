@@ -14,7 +14,12 @@ from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Dropout, Input
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop
+from tensorflow.keras.initializers import HeNormal, GlorotUniform
+from tensorflow.keras.regularizers import l1, l2, l1_l2
+from tensorflow.keras.metrics import Precision, Recall
+from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.preprocessing import LabelEncoder
 
 
