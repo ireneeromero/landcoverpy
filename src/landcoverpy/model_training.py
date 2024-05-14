@@ -13,6 +13,7 @@ from landcoverpy.config import settings
 from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam, SGD, RMSprop
@@ -248,11 +249,6 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     regularization_index = 3
     weight_initialization = 1
     dropout = 1
-
-    X_train = self.X_train
-    X_test = self.X_test
-    y_train = self.y_train
-    y_test = self.y_test
 
 
     # Inicialización de pesos
