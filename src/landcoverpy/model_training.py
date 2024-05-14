@@ -185,9 +185,6 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
 
     used_columns = _feature_reduction(x_train_data, y_train_data)
 
-
-
-
     unique_locations_with_class = df[['latitude', 'longitude', 'class']].drop_duplicates()
     train_dfs = []
     test_dfs = []
@@ -211,7 +208,7 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
 
     train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude', 'class'])
-    test_df = pd.merge(df, test_coordinates, on=['latitude', 'longitude', 'class'])
+    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude', 'class'])
 
     X_train = train_df[used_columns]
     X_test = test_df[used_columns]
@@ -238,16 +235,81 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     label_encoder_train = LabelEncoder()
     y_train = label_encoder_train.fit_transform(y_train_mapped)
  
+    n_layers = 0
+    n_neurons = 60
+    activation_index = 2
+    learning_rate = 15/1000
+    optimization = 1
+    regularization_index = 3
+    weight_initialization = 1
+    dropout = 1
+
+    X_train = self.X_train
+    X_test = self.X_test
+    y_train = self.y_train
+    y_test = self.y_test
+
+
+    # Inicialización de pesos
+    if weight_initialization == 0:
+        initializer = HeNormal()
+    elif weight_initialization == 1:
+        initializer = GlorotUniform()
+    else:
+        initializer = 'uniform' 
+
+    # Función de activación
+    activation_functions = {
+            0: 'relu',
+            1: 'sigmoid',
+            2: 'tanh'
+    }
+    activation_func = activation_functions[activation_index]
+
+    # Regularización
+    regularization_functions = {
+            0: l1(0.01),  # L1 regularization with a regularization factor of 0.01
+            1: l2(0.01),  # L2 regularization with a regularization factor of 0.01,
+            2: l1_l2(l1=0.01, l2=0.01),
+            3: 'None'
+    }
+    regularization = regularization_functions[regularization_index]
+
+    #Optimizador
+
+    if optimization == 0:
+        optimizer = Adam(learning_rate=learning_rate)
+    elif optimization == 1:
+        optimizer = SGD(learning_rate=learning_rate)
+    elif optimization == 2:
+        optimizer = RMSprop(learning_rate=learning_rate)
+        
+    print("Optimizer", optimizer)
+    print("regularization", regularization)
+    print("activation_func", activation_func)
+    print("initializer", initializer)
+    print("n_layer", n_layers)
+    print("n_neurons", n_neurons)
+    print("learning_rate", learning_rate)
 
     # Train model
     model = Sequential()
-    model.add(Dense(64, activation='relu', input_shape=(X_train.shape[1],)))
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(9, activation='softmax'))
+    model.add(Input(shape=(X_train.shape[1],)))
+    
+    for _ in range(n_layers):
+        if regularization == 'None':
+                model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
+        else:
+                model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization))
+        if dropout == 0:
+                model.add(Dropout(0.2)) 
 
-    model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',  # Use 'sparse_categorical_crossentropy' if the labels are integers
-              metrics=['accuracy'])
+       
+        # Capa de salida
+    model.add(Dense(9, activation='softmax'))
+        
+    model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        
     X_train = X_train.reindex(columns=used_columns)
     
     model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2)
