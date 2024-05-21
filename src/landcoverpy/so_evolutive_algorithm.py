@@ -45,8 +45,8 @@ class NeuralNetworkOptimizer(IntegerProblem):
         self.upper_bound = [5, 64, 2, 100, 2, 3, 2, 1] 
 
         
-        self.obj_directions = [self.MAXIMIZE, self.MAXIMIZE]
-        self.obj_labels = ["Accuracy", "balanced_accuracy"]
+        self.obj_directions = [self.MAXIMIZE]
+        self.obj_labels = ["Accuracy"]
 
     def number_of_objectives(self) -> int:
         return len(self.obj_directions)
@@ -115,6 +115,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         print("n_layer", n_layers)
         print("n_neurons", n_neurons)
         print("learning_rate", learning_rate)
+        print("Vbujkfdvgnlxdñ")
 
         
         model = Sequential()
@@ -157,21 +158,12 @@ class NeuralNetworkOptimizer(IntegerProblem):
         y_pred = np.array([np.argmax(pred) + 1 for pred in y_pred_encoded])
         y_pred = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
         
-
-        print(np.unique(y_pred))
-        print(np.unique(y_test))
         accuracy = accuracy_score(y_test, y_pred)
-        #precision = precision_score(y_test, y_pred, average='macro') 
-        recall = recall_score(y_test, y_pred, average='macro')
-        balanced_accuracy = balanced_accuracy_score(y_test, y_pred)
-
-        print("accuracy", accuracy)
-        print("balanced_accuracy", balanced_accuracy)
-        print("recall", recall)
-        
+        print("metrica", accuracy)
+        print("SDFGHJKILO")
+        print("vhjklñ")
         
         solution.objectives[0] = -1*accuracy
-        solution.objectives[1] = -1*balanced_accuracy
 
         return solution
 

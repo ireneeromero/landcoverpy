@@ -6,14 +6,15 @@ from jmetal.util.solution import print_function_values_to_file, print_variables_
 from jmetal.util.termination_criterion import StoppingByEvaluations
 from jmetal.util.evaluator import MultiprocessEvaluator
 from sklearn.preprocessing import LabelEncoder 
-from jmetal.util.observer import PrintObjectivesObserver
-
-from landcoverpy.evolutive_algorithm import NeuralNetworkOptimizer
+from jmetal.util.observer import PrintObjectivesObserver, PlotFrontToFileObserver, WriteFrontToFileObserver
+from jmetal.lab.visualization import InteractivePlot, Plot
+from landcoverpy.evolutive_algorithm_new_metrics import NeuralNetworkOptimizer
 from landcoverpy.minio_func import MinioConnection
 from landcoverpy.config import settings
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 import pandas as pd
 import numpy as np
+
 
 
 if __name__ == "__main__":
@@ -49,24 +50,30 @@ if __name__ == "__main__":
 
     used_columns = x_train_data.columns.tolist()
     
-    unique_locations = df.drop_duplicates(subset=["latitude","longitude"])
-    unique_locations = unique_locations[['latitude', 'longitude']]
+    unique_locations_with_class = df[['latitude', 'longitude', 'class']].drop_duplicates()
+    train_dfs = []
+    test_dfs = []
+    for class_label in unique_locations_with_class['class'].unique():
 
-    unique_locations = unique_locations.sample(frac=1).reset_index(drop=True)
+        class_locations = unique_locations_with_class[unique_locations_with_class['class'] == class_label]
+        class_locations = class_locations.sample(frac=1).reset_index(drop=True)
+        
+        split_point = int(len(class_locations) * 0.85)
+        
+        train_locations = class_locations.iloc[:split_point]
+        test_locations = class_locations.iloc[split_point:]
+        
+        train_dfs.append(train_locations)
+        test_dfs.append(test_locations)
 
-    train_size = 0.85
-
-    split_index = int(len(unique_locations) * train_size)
-
-    train_coordinates = unique_locations[:split_index]
-    test_coordinates = unique_locations[split_index:]
-    print("test_coordinates", test_coordinates)
+    train_coordinates = pd.concat(train_dfs).reset_index(drop=True)
+    test_coordinates = pd.concat(test_dfs).reset_index(drop=True)
 
     # Filter the coordinates for Andalusia.
     filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
-    
-    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude'])
-    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude'])
+
+    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude', 'class'])
+    test_df = pd.merge(df, test_coordinates, on=['latitude', 'longitude', 'class'])
 
     X_train = train_df[used_columns]
     X_test = test_df[used_columns]
@@ -74,6 +81,8 @@ if __name__ == "__main__":
     y_test = test_df['class']
 
 
+    print(y_train.unique())
+    print(y_test.unique())
 
     mapping = {
     "builtUp": 1,
@@ -103,17 +112,37 @@ if __name__ == "__main__":
         problem=problem,
         population_size=100,
         offspring_population_size=100,
-        mutation=IntegerPolynomialMutation(probability=1.0 / 7, distribution_index=20),
+        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables(), distribution_index=20),
         crossover=IntegerSBXCrossover(probability=1.0, distribution_index=20),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
     
-    
     algorithm.observable.register(observer=PrintObjectivesObserver(max_evaluations))
+
     
+    algorithm.observable.register(observer=PlotFrontToFileObserver(output_directory='output_directory', step=1))
+
+
     algorithm.run()
     front = algorithm.get_result()
+
+
+    # Plot front
+    plot_front = Plot(
+        title="Pareto front approximation. Problem: " + problem.name(),
+        axis_labels=problem.obj_labels,
+    )
+    plot_front.plot(front, label=algorithm.label, filename=algorithm.get_name())
+
+    # Plot interactive front
+    plot_front = InteractivePlot(
+        title="Pareto front approximation. Problem: " + problem.name(),
+        axis_labels=problem.obj_labels,
+    )
+    plot_front.plot(front, label=algorithm.label, filename=algorithm.get_name())
+
+
 
     # Save results to file
     print_function_values_to_file(front, "FUN." + algorithm.label)

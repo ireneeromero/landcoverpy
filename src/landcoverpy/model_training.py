@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-
+from sklearn.metrics import accuracy_score
 from landcoverpy.config import settings
 from landcoverpy.minio_func import MinioConnection
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
@@ -241,13 +241,14 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     label_encoder_train = LabelEncoder()
     y_train = label_encoder_train.fit_transform(y_train_mapped)
  
-    n_layers = 0
-    n_neurons = 60
-    activation_index = 2
-    learning_rate = 15/1000
+  #2 23 0 21 1 3 0 1 
+    n_layers = 2
+    n_neurons = 23
+    activation_index = 0
+    learning_rate = 21/1000
     optimization = 1
     regularization_index = 3
-    weight_initialization = 1
+    weight_initialization = 0
     dropout = 1
 
 
@@ -320,9 +321,9 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
 
     # Reverse the encoding process using the reverse label encoder
     y_pred = label_encoder_train.inverse_transform(y_pred_indices)
-  
     # Get y_pred label names
     y_true = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
+   
 
     labels = y_train_data.unique()
 

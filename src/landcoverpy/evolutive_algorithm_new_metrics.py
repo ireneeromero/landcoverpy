@@ -2,6 +2,7 @@ import random
 import numpy as np
 from jmetal.core.problem import IntegerProblem
 from jmetal.core.solution import IntegerSolution
+from collections import Counter
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -14,7 +15,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score
-
+from sklearn.metrics import confusion_matrix
 
 
 
@@ -45,8 +46,8 @@ class NeuralNetworkOptimizer(IntegerProblem):
         self.upper_bound = [5, 64, 2, 100, 2, 3, 2, 1] 
 
         
-        self.obj_directions = [self.MAXIMIZE, self.MAXIMIZE]
-        self.obj_labels = ["Accuracy", "balanced_accuracy"]
+        self.obj_directions = [self.MINIMIZE, self.MINIMIZE]
+        self.obj_labels = ["FNR", "FPR"]
 
     def number_of_objectives(self) -> int:
         return len(self.obj_directions)
@@ -136,7 +137,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         
         model.summary()
 
-        early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=10, mode='min', verbose=1,)
         model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
 
         mapping = {
@@ -156,22 +157,48 @@ class NeuralNetworkOptimizer(IntegerProblem):
         
         y_pred = np.array([np.argmax(pred) + 1 for pred in y_pred_encoded])
         y_pred = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
-        
 
-        print(np.unique(y_pred))
-        print(np.unique(y_test))
+        conf_matrix = confusion_matrix(y_test, y_pred)
+
+        TN = conf_matrix.diagonal().sum() - conf_matrix.trace() # verdaderos negativos
+        FP = conf_matrix.sum(axis=0) - conf_matrix.diagonal()  # falsos positivos
+        FN = conf_matrix.sum(axis=1) - conf_matrix.diagonal()  # falsos negativos
+        TP = conf_matrix.diagonal()   
+        print("Matriz de Confusión:")
+        print(conf_matrix)
+        print("FP:", FP)
+        print("TN:", TN)
+        print("FN:", FN)
+        print("TP:", TP)                         # verdaderos positivos
+
+        # Calcular la tasa de falsos positivos (FPR) y la tasa de falsos negativos (FNR)
+        # Calcular la tasa de falsos positivos (FPR) evitando divisiones por cero
+        FPR = np.where((FP + TN) == 0, 0, FP / (FP + TN))
+        FNR = np.where((FN + TP) == 0, 0, FN / (FN + TP))
+
+        print("Tasa de Falsos Positivos (FPR):", FPR)
+        print("Tasa de Falsos Negativos (FNR):", FNR)
+
+        total_samples = len(y_test)
+
+        # Calcular el número de muestras para cada clase
+        class_counts = Counter(y_test)
+        print("class_counts", class_counts)
+
+        # Calcular los pesos de cada clase para el promedio ponderado
+        class_weights = np.array([count / total_samples for count in class_counts.values()])
+
+        # Calcular el FPR y FNR ponderado
+        weighted_FPR = np.sum(FPR * class_weights)
+        weighted_FNR = np.sum(FNR * class_weights)
+
+        print("Tasa de Falsos Positivos Ponderada (FPR):", weighted_FPR)
+        print("Tasa de Falsos Negativos Ponderada (FNR):", weighted_FNR)
+        
         accuracy = accuracy_score(y_test, y_pred)
-        #precision = precision_score(y_test, y_pred, average='macro') 
-        recall = recall_score(y_test, y_pred, average='macro')
-        balanced_accuracy = balanced_accuracy_score(y_test, y_pred)
-
         print("accuracy", accuracy)
-        print("balanced_accuracy", balanced_accuracy)
-        print("recall", recall)
-        
-        
-        solution.objectives[0] = -1*accuracy
-        solution.objectives[1] = -1*balanced_accuracy
+        solution.objectives[0] = weighted_FNR
+        solution.objectives[1] = weighted_FPR
 
         return solution
 
