@@ -14,75 +14,123 @@ from landcoverpy.config import settings
 from landcoverpy.utilities.confusion_matrix import compute_confusion_matrix
 import pandas as pd
 import numpy as np
+import os
+from pathlib import Path
+import matplotlib.pyplot as plt
+from jmetal.util.observer import Observer
 
+
+class EvaluationObserver(Observer):
+    def __init__(self, output_directory: str, step: int = 1) -> None:
+        """Observer that saves the best evaluation for each generation to a file.
+
+        :param output_directory: Output directory.
+        :param step: Frequency of recording the evaluations.
+        """
+        self.directory = output_directory
+        self.step = step
+        self.counter = 0
+        self.best_evaluations = []
+
+        # Create directory if it does not exist
+        if Path(self.directory).is_dir():
+            print(f"Directory {self.directory} exists. Removing contents.")
+            for file in os.listdir(self.directory):
+                os.remove(f"{self.directory}/{file}")
+        else:
+            print(f"Directory {self.directory} does not exist. Creating it.")
+            Path(self.directory).mkdir(parents=True)
+
+    def update(self, *args, **kwargs):
+        solutions = kwargs["SOLUTIONS"]
+
+        if solutions is not None:
+            if isinstance(solutions, list):
+                best_solution = min(solutions, key=lambda s: s.objectives[0])
+            else:
+                best_solution = solutions  # solutions is a single IntegerSolution
+            self.best_evaluations.append(best_solution.objectives[0])
+            self.counter += 1
+
+            print(f"Best evaluation at step {self.counter}: {best_solution.objectives[0]}")
+
+            # Save evaluations to file at specified intervals
+            if self.counter % self.step == 0:
+                self.save_to_file()
+
+    def save_to_file(self) -> None:
+        file_path = os.path.join(self.directory, f"evaluations_{self.counter}.txt")
+        with open(file_path, 'w') as f:
+            for eval in self.best_evaluations:
+                f.write(f"{-1*eval}\n")
+        print(f"Saved evaluations to {file_path}")
+
+    def plot_evaluations(self) -> None:
+        abs_evaluations = [abs(eval) for eval in self.best_evaluations]
+        x_labels = [i * self.step for i in range(len(abs_evaluations))]
+        plt.plot(x_labels, abs_evaluations)
+        plt.xlabel('Evaluation')
+        plt.ylabel('Accuracy')
+        plt.title('Best Evaluation per Generation')
+        plt.savefig(os.path.join(self.directory, 'evaluation_plot.png'))
+        plt.show()
 
 
 if __name__ == "__main__":
 
-    land_cover_dataset = "dataset_postprocessed.csv"
-    training_dataset_path = join(settings.TMP_DIR, land_cover_dataset)
+    X_train_dataset = "x_train.csv"
+    X_train_dataset_path = join(settings.TMP_DIR, X_train_dataset)
+
+    X_test_dataset = "x_test.csv"
+    X_test_dataset_path = join(settings.TMP_DIR, X_test_dataset)
+
+    y_train_dataset = "y_train.csv"
+    y_train_dataset_path = join(settings.TMP_DIR, y_train_dataset)
+
+    y_test_dataset = "y_test.csv"
+    y_test_dataset_path = join(settings.TMP_DIR, y_test_dataset)
 
     minio_client = MinioConnection()
 
+
     minio_client.fget_object(
         bucket_name=settings.MINIO_BUCKET_DATASETS,
-        object_name=join(settings.MINIO_DATA_FOLDER_NAME, land_cover_dataset),
-        file_path=training_dataset_path,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', X_train_dataset),
+        file_path=X_train_dataset_path,
     )
 
-    df = pd.read_csv(training_dataset_path)
-    df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.fillna(np.nan)
-    df = df.dropna()
-
-    y_train_data = df["class"]
-    x_train_data = df.drop(
-        [
-            "class",
-            "latitude",
-            "longitude",
-            "spring_product_name",
-            "autumn_product_name",
-            "summer_product_name",
-        ],
-        axis=1,
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', X_test_dataset),
+        file_path=X_test_dataset_path,
     )
 
-    used_columns = x_train_data.columns.tolist()
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', y_train_dataset),
+        file_path=y_train_dataset_path,
+    )
+
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', y_test_dataset),
+        file_path=y_test_dataset_path,
+    )
+
     
-    unique_locations_with_class = df[['latitude', 'longitude', 'class']].drop_duplicates()
-    train_dfs = []
-    test_dfs = []
-    for class_label in unique_locations_with_class['class'].unique():
 
-        class_locations = unique_locations_with_class[unique_locations_with_class['class'] == class_label]
-        class_locations = class_locations.sample(frac=1).reset_index(drop=True)
-        
-        split_point = int(len(class_locations) * 0.85)
-        
-        train_locations = class_locations.iloc[:split_point]
-        test_locations = class_locations.iloc[split_point:]
-        
-        train_dfs.append(train_locations)
-        test_dfs.append(test_locations)
+    X_train = pd.read_csv(X_train_dataset_path)
+    X_test = pd.read_csv(X_test_dataset_path)
+    y_train = pd.read_csv(y_train_dataset_path)
+    y_test = pd.read_csv(y_test_dataset_path)
 
-    train_coordinates = pd.concat(train_dfs).reset_index(drop=True)
-    test_coordinates = pd.concat(test_dfs).reset_index(drop=True)
-
-    # Filter the coordinates for Andalusia.
-    filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
-
-    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude', 'class'])
-    test_df = pd.merge(df, test_coordinates, on=['latitude', 'longitude', 'class'])
-
-    X_train = train_df[used_columns]
-    X_test = test_df[used_columns]
-    y_train = train_df['class']
-    y_test = test_df['class']
+    y_train = y_train['class']
+    y_test = y_test['class']
+   
 
 
-    print(y_train.unique())
-    print(y_test.unique())
+
+   
 
     mapping = {
     "builtUp": 1,
@@ -105,19 +153,27 @@ if __name__ == "__main__":
     problem = NeuralNetworkOptimizer(X_train, X_test, y_train, y_test)
     print("problem.number_of_variables", problem.number_of_variables())
 
-    max_evaluations = 20000
+    max_evaluations = 100
+    
+    output_directory = "output_directory_path"  # Define la ruta de tu directorio de salida
+    evaluation_observer = EvaluationObserver(output_directory=output_directory, step=10)
+
+
 
     algorithm = EvolutionStrategy(
         population_evaluator=MultiprocessEvaluator(8),
         problem=problem,
-        mu=100, #population_size
-        lambda_=100, #offspring_population_size
+        mu=10, #population_size
+        lambda_=10, #offspring_population_size
         elitist=True,
         mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables()),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
-    algorithm.observable.register(observer=PlotFrontToFileObserver(output_directory='single_directory', step=100))
+    
+
+    
+    algorithm.observable.register(evaluation_observer)
     
     algorithm.run()
     result = algorithm.get_result()
@@ -132,5 +188,9 @@ if __name__ == "__main__":
     print("Solution: " + str(result.variables[0]))
     print("Fitness:  " + str(result.objectives[0]))
     print("Computing time: " + str(algorithm.total_computing_time))
+
+    evaluation_observer.save_to_file()
+    evaluation_observer.plot_evaluations()
+
 
   
