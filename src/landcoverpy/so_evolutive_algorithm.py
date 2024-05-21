@@ -122,6 +122,12 @@ class NeuralNetworkOptimizer(IntegerProblem):
         model.add(Input(shape=(X_train.shape[1],)))
     
         for _ in range(n_layers):
+            if weight_initialization == 0:
+                initializer = HeNormal()
+            elif weight_initialization == 1:
+                initializer = GlorotUniform()
+            else:
+                initializer = 'uniform' 
             if regularization == 'None':
                 model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
             else:
@@ -138,7 +144,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         model.summary()
 
         early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
-        model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
 
         mapping = {
             "builtUp": 1,
