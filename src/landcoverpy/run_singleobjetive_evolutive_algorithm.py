@@ -1,5 +1,5 @@
 from os.path import join
-from jmetal.algorithm.singleobjective.evolution_strategy import EvolutionStrategy
+from jmetal.algorithm.singleobjective.genetic_algorithm import GeneticAlgorithm
 from jmetal.operator.mutation import IntegerPolynomialMutation
 from jmetal.operator.crossover import IntegerSBXCrossover
 from jmetal.util.solution import print_function_values_to_file, print_variables_to_file
@@ -31,6 +31,7 @@ class EvaluationObserver(Observer):
         self.step = step
         self.counter = 0
         self.best_evaluations = []
+        self.all_evaluations = []
 
         # Create directory if it does not exist
         if Path(self.directory).is_dir():
@@ -45,14 +46,11 @@ class EvaluationObserver(Observer):
         solutions = kwargs["SOLUTIONS"]
 
         if solutions is not None:
-            if isinstance(solutions, list):
-                best_solution = min(solutions, key=lambda s: s.objectives[0])
-            else:
-                best_solution = solutions  # solutions is a single IntegerSolution
-            self.best_evaluations.append(best_solution.objectives[0])
+            for solution in solutions:
+                self.all_evaluations.append(solution.objectives[0])
             self.counter += 1
 
-            print(f"Best evaluation at step {self.counter}: {best_solution.objectives[0]}")
+            print(f"Step {self.counter}: {solutions}")
 
             # Save evaluations to file at specified intervals
             if self.counter % self.step == 0:
@@ -66,15 +64,14 @@ class EvaluationObserver(Observer):
         print(f"Saved evaluations to {file_path}")
 
     def plot_evaluations(self) -> None:
-        abs_evaluations = [abs(eval) for eval in self.best_evaluations]
-        x_labels = [i * self.step for i in range(len(abs_evaluations))]
+        abs_evaluations = [abs(eval) for eval in self.all_evaluations]
+        x_labels = list(range(len(abs_evaluations)))
         plt.plot(x_labels, abs_evaluations)
         plt.xlabel('Evaluation')
-        plt.ylabel('Accuracy')
-        plt.title('Best Evaluation per Generation')
+        plt.ylabel('Fitness')
+        plt.title('Evaluation per Generation')
         plt.savefig(os.path.join(self.directory, 'evaluation_plot.png'))
         plt.show()
-
 
 if __name__ == "__main__":
 
@@ -117,8 +114,6 @@ if __name__ == "__main__":
         file_path=y_test_dataset_path,
     )
 
-    
-
     X_train = pd.read_csv(X_train_dataset_path)
     X_test = pd.read_csv(X_test_dataset_path)
     y_train = pd.read_csv(y_train_dataset_path)
@@ -128,9 +123,6 @@ if __name__ == "__main__":
     y_test = y_test['class']
    
 
-
-
-   
 
     mapping = {
     "builtUp": 1,
@@ -156,17 +148,17 @@ if __name__ == "__main__":
     max_evaluations = 100
     
     output_directory = "output_directory_path"  # Define la ruta de tu directorio de salida
-    evaluation_observer = EvaluationObserver(output_directory=output_directory, step=10)
+    evaluation_observer = EvaluationObserver(output_directory=output_directory, step=1)
 
 
 
-    algorithm = EvolutionStrategy(
+    algorithm = GeneticAlgorithm(
         population_evaluator=MultiprocessEvaluator(8),
         problem=problem,
-        mu=10, #population_size
-        lambda_=10, #offspring_population_size
-        elitist=True,
-        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables()),
+        population_size=10,
+        offspring_population_size=10,
+        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables(), distribution_index=20),
+         crossover=IntegerSBXCrossover(probability=1.0, distribution_index=20),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 

@@ -143,8 +143,8 @@ class NeuralNetworkOptimizer(IntegerProblem):
         
         model.summary()
 
-        early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
-        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+        early_stopping = EarlyStopping(monitor='val_loss', patience=7, mode='min', verbose=1,)
+        model.fit(X_train, y_train, epochs=20, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
 
         mapping = {
             "builtUp": 1,
@@ -165,9 +165,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         y_pred = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
         
         accuracy = accuracy_score(y_test, y_pred)
-        print("metrica", accuracy)
-        print("SDFGHJKILO")
-        print("vhjklñ")
+        
         
         solution.objectives[0] = -1*accuracy
 
