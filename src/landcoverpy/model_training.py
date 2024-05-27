@@ -160,68 +160,57 @@ def train_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
 def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     """Trains a Random Forest model using a land cover dataset."""
 
-    training_dataset_path = join(settings.TMP_DIR, land_cover_dataset)
+    X_train_dataset = "x_train.csv"
+    X_train_dataset_path = join(settings.TMP_DIR, X_train_dataset)
+
+    X_test_dataset = "x_test.csv"
+    X_test_dataset_path = join(settings.TMP_DIR, X_test_dataset)
+
+    y_train_dataset = "y_train.csv"
+    y_train_dataset_path = join(settings.TMP_DIR, y_train_dataset)
+
+    y_test_dataset = "y_test.csv"
+    y_test_dataset_path = join(settings.TMP_DIR, y_test_dataset)
 
     minio_client = MinioConnection()
 
+
     minio_client.fget_object(
         bucket_name=settings.MINIO_BUCKET_DATASETS,
-        object_name=join(settings.MINIO_DATA_FOLDER_NAME, land_cover_dataset),
-        file_path=training_dataset_path,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', X_train_dataset),
+        file_path=X_train_dataset_path,
     )
 
-    df = pd.read_csv(training_dataset_path)
-    df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.fillna(np.nan)
-    df = df.dropna()
-    print("ddddd",len(df))
-
-    y_train_data = df["class"]
-    x_train_data = df.drop(
-        [
-            "class",
-            "latitude",
-            "longitude",
-            "spring_product_name",
-            "autumn_product_name",
-            "summer_product_name",
-        ],
-        axis=1,
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', X_test_dataset),
+        file_path=X_test_dataset_path,
     )
 
-    used_columns = _feature_reduction(x_train_data, y_train_data)
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', y_train_dataset),
+        file_path=y_train_dataset_path,
+    )
 
-    unique_locations_with_class = df[['latitude', 'longitude', 'class']].drop_duplicates()
-    train_dfs = []
-    test_dfs = []
-    for class_label in unique_locations_with_class['class'].unique():
+    minio_client.fget_object(
+        bucket_name=settings.MINIO_BUCKET_DATASETS,
+        object_name=join(settings.MINIO_DATA_FOLDER_NAME +'/train-test', y_test_dataset),
+        file_path=y_test_dataset_path,
+    )
 
-        class_locations = unique_locations_with_class[unique_locations_with_class['class'] == class_label]
-        class_locations = class_locations.sample(frac=1).reset_index(drop=True)
-        
-        split_point = int(len(class_locations) * 0.85)
-        
-        train_locations = class_locations.iloc[:split_point]
-        test_locations = class_locations.iloc[split_point:]
-        
-        train_dfs.append(train_locations)
-        test_dfs.append(test_locations)
+    
 
-    train_coordinates = pd.concat(train_dfs).reset_index(drop=True)
-    test_coordinates = pd.concat(test_dfs).reset_index(drop=True)
+    X_train = pd.read_csv(X_train_dataset_path)
+    X_test = pd.read_csv(X_test_dataset_path)
+    y_train = pd.read_csv(y_train_dataset_path)
+    y_test = pd.read_csv(y_test_dataset_path)
 
-    # Filter the coordinates for Andalusia.
-    filtered_test_coordinates = test_coordinates[(test_coordinates['latitude'] >= 36.000192) & (test_coordinates['latitude'] <= 38.738181)]
+    y_train = y_train['class']
+    y_test = y_test['class']
 
-    train_df = pd.merge(df, train_coordinates, on=['latitude', 'longitude', 'class'])
-    test_df = pd.merge(df, filtered_test_coordinates, on=['latitude', 'longitude', 'class'])
-
-    X_train = train_df[used_columns]
-    X_test = test_df[used_columns]
-    y_train = train_df['class']
-    y_test = test_df['class']
-
-
+    y_combined = pd.concat([y_train, y_test], ignore_index=True)
+   
 
     mapping = {
     "builtUp": 1,
@@ -242,13 +231,19 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     y_train = label_encoder_train.fit_transform(y_train_mapped)
  
   #2 23 0 21 1 3 0 1 
+  # 3 49 2 2 2 3 0 0 
+  # 2, 61, 2, 76, 1, 3, 0, 1
+  # 1 54 2 71 2 0 0 0 
+  # 3 53 1 6 0 3 0 1 
+
+  # 2 60 2 15 1 3 1 1 
     n_layers = 2
-    n_neurons = 23
-    activation_index = 0
-    learning_rate = 21/1000
+    n_neurons = 60
+    activation_index = 2
+    learning_rate = 15/1000
     optimization = 1
     regularization_index = 3
-    weight_initialization = 0
+    weight_initialization = 1
     dropout = 1
 
 
@@ -299,11 +294,17 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     model.add(Input(shape=(X_train.shape[1],)))
     
     for _ in range(n_layers):
-        if regularization == 'None':
+            if weight_initialization == 0:
+                initializer = HeNormal()
+            elif weight_initialization == 1:
+                initializer = GlorotUniform()
+            else:
+                initializer = 'uniform' 
+            if regularization == 'None':
                 model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
-        else:
+            else:
                 model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization))
-        if dropout == 0:
+            if dropout == 0:
                 model.add(Dropout(0.2)) 
 
        
@@ -312,10 +313,9 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
         
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         
-    X_train = X_train.reindex(columns=used_columns)
     
-    early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
-    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3, mode='min', verbose=1,)
+    model.fit(X_train, y_train, epochs=20, batch_size=32, validation_split=0.2)
     y_pred_encoded = model.predict(X_test)
     y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 
@@ -324,8 +324,9 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     # Get y_pred label names
     y_true = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
    
-
-    labels = y_train_data.unique()
+    accuracy = accuracy_score(y_test, y_true)
+    print("accuracy", accuracy) 
+    labels = y_combined.unique()
 
     confusion_image_filename = "confusion_matrix.png"
     out_image_path = join(settings.TMP_DIR, confusion_image_filename)
