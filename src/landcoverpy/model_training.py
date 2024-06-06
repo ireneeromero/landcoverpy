@@ -236,26 +236,35 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
   # 1 54 2 71 2 0 0 0 
   # 3 53 1 6 0 3 0 1 
 
+  #2 61 2 76 1 3 0 1 
+
   # 2 60 2 15 1 3 1 1 
+
+  #2 62 0 82 0 3 0 1
+
+  #2 121 0 1 0 3 0 0 1  0.689
+
     n_layers = 2
-    n_neurons = 60
-    activation_index = 2
-    learning_rate = 15/1000
-    optimization = 1
+    n_neurons = 121
+    activation_index = 0
+    learning_rate = 1/1000
+    optimization = 0
     regularization_index = 3
-    weight_initialization = 1
-    dropout = 1
+    weight_initialization = 0
+    dropout = 0
+    dropout_value = 1/10
 
 
-    # Inicialización de pesos
-    if weight_initialization == 0:
-        initializer = HeNormal()
-    elif weight_initialization == 1:
-        initializer = GlorotUniform()
-    else:
-        initializer = 'uniform' 
+    initializer_functions = {
+            0: 'he_normal',
+            1: 'glorot_uniform',
+            2: 'random_uniform'
+        }
+    initializer = initializer_functions[weight_initialization]
 
-    # Función de activación
+
+
+        # Función de activación
     activation_functions = {
             0: 'relu',
             1: 'sigmoid',
@@ -288,34 +297,30 @@ def train_dnn_model_land_cover(land_cover_dataset: str, n_jobs: int = 2):
     print("n_layer", n_layers)
     print("n_neurons", n_neurons)
     print("learning_rate", learning_rate)
+    print("Vbujkfdvgnlxdñ")
 
-    # Train model
+        
     model = Sequential()
     model.add(Input(shape=(X_train.shape[1],)))
     
     for _ in range(n_layers):
-            if weight_initialization == 0:
-                initializer = HeNormal()
-            elif weight_initialization == 1:
-                initializer = GlorotUniform()
-            else:
-                initializer = 'uniform' 
-            if regularization == 'None':
-                model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
-            else:
-                model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization))
-            if dropout == 0:
-                model.add(Dropout(0.2)) 
+             
+        if regularization == 'None':
+            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
+        else:
+            model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization))
+        if dropout == 0:
+            model.add(Dropout(dropout_value)) 
 
-       
+                
         # Capa de salida
     model.add(Dense(9, activation='softmax'))
         
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         
     
-    early_stopping = EarlyStopping(monitor='val_loss', patience=3, mode='min', verbose=1,)
-    model.fit(X_train, y_train, epochs=20, batch_size=32, validation_split=0.2)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=7, mode='min', verbose=1,)
+    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.20, callbacks=[early_stopping])
     y_pred_encoded = model.predict(X_test)
     y_pred_indices = np.argmax(y_pred_encoded, axis=1)
 

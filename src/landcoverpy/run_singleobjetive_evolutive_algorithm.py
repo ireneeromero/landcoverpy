@@ -1,5 +1,5 @@
 from os.path import join
-from jmetal.algorithm.singleobjective.evolution_strategy import EvolutionStrategy
+from jmetal.algorithm.singleobjective.genetic_algorithm import GeneticAlgorithm
 from jmetal.operator.mutation import IntegerPolynomialMutation
 from jmetal.operator.crossover import IntegerSBXCrossover
 from jmetal.util.solution import print_function_values_to_file, print_variables_to_file
@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import matplotlib.pyplot as plt
 from jmetal.util.observer import Observer
+from jmetal.core.solution import IntegerSolution
 
 
 class EvaluationObserver(Observer):
@@ -31,6 +32,8 @@ class EvaluationObserver(Observer):
         self.step = step
         self.counter = 0
         self.best_evaluations = []
+        self.all_evaluations = []
+        self.all_individuals = []
 
         # Create directory if it does not exist
         if Path(self.directory).is_dir():
@@ -46,36 +49,43 @@ class EvaluationObserver(Observer):
 
         if solutions is not None:
             if isinstance(solutions, list):
-                best_solution = min(solutions, key=lambda s: s.objectives[0])
+                for solution in solutions:
+                    self.all_evaluations.append(solution.objectives[0])
+                    self.all_individuals.append(solution.variables)
             else:
-                best_solution = solutions  # solutions is a single IntegerSolution
-            self.best_evaluations.append(best_solution.objectives[0])
+                self.all_evaluations.append(solutions.objectives[0])
+                self.all_individuals.append(solutions.variables)
+
             self.counter += 1
 
-            print(f"Best evaluation at step {self.counter}: {best_solution.objectives[0]}")
+            print(f"Step {self.counter}: {solutions}")
 
             # Save evaluations to file at specified intervals
             if self.counter % self.step == 0:
                 self.save_to_file()
 
     def save_to_file(self) -> None:
-        file_path = os.path.join(self.directory, f"evaluations_{self.counter}.txt")
-        with open(file_path, 'w') as f:
-            for eval in self.best_evaluations:
-                f.write(f"{-1*eval}\n")
-        print(f"Saved evaluations to {file_path}")
+        eval_file_path = os.path.join(self.directory, f"evaluations_{self.counter}.txt")
+        with open(eval_file_path, 'w') as f:
+            for eval in self.all_evaluations:
+                f.write(f"{-1 * eval}\n")
+        print(f"Saved evaluations to {eval_file_path}")
+
+        ind_file_path = os.path.join(self.directory, f"individuals_{self.counter}.txt")
+        with open(ind_file_path, 'w') as f:
+            for ind in self.all_individuals:
+                f.write(f"{ind}\n")
+        print(f"Saved individuals to {ind_file_path}")
 
     def plot_evaluations(self) -> None:
-        abs_evaluations = [abs(eval) for eval in self.best_evaluations]
-        x_labels = [i * self.step for i in range(len(abs_evaluations))]
+        abs_evaluations = [abs(eval) for eval in self.all_evaluations]
+        x_labels = list(range(len(abs_evaluations)))
         plt.plot(x_labels, abs_evaluations)
         plt.xlabel('Evaluation')
-        plt.ylabel('Accuracy')
-        plt.title('Best Evaluation per Generation')
+        plt.ylabel('Fitness')
+        plt.title('Evaluation per Generation')
         plt.savefig(os.path.join(self.directory, 'evaluation_plot.png'))
-        plt.show()
-
-
+      
 if __name__ == "__main__":
 
     X_train_dataset = "x_train.csv"
@@ -117,20 +127,31 @@ if __name__ == "__main__":
         file_path=y_test_dataset_path,
     )
 
-    
-
     X_train = pd.read_csv(X_train_dataset_path)
     X_test = pd.read_csv(X_test_dataset_path)
     y_train = pd.read_csv(y_train_dataset_path)
     y_test = pd.read_csv(y_test_dataset_path)
+##############################3333 to balanced ###############33
+    train_df = pd.concat([X_train, y_train], axis=1)
 
-    y_train = y_train['class']
+    num_samples = 2600
+    undersampled_dfs = []
+
+    for class_name in train_df['class'].unique():
+        class_df = train_df[train_df['class'] == class_name]
+        undersampled_class_df = class_df.sample(n=num_samples, random_state=42)
+        undersampled_dfs.append(undersampled_class_df)
+
+    train_resampled_df = pd.concat(undersampled_dfs)
+    
+    X_train = train_resampled_df.drop('class', axis=1)
+    y_train = train_resampled_df['class']
+
+    print(y_train.value_counts())
+###############################################################################3
+    #y_train = y_train['class']
     y_test = y_test['class']
-   
 
-
-
-   
 
     mapping = {
     "builtUp": 1,
@@ -153,25 +174,29 @@ if __name__ == "__main__":
     problem = NeuralNetworkOptimizer(X_train, X_test, y_train, y_test)
     print("problem.number_of_variables", problem.number_of_variables())
 
-    max_evaluations = 100
+    max_evaluations = 10000
     
     output_directory = "output_directory_path"  # Define la ruta de tu directorio de salida
-    evaluation_observer = EvaluationObserver(output_directory=output_directory, step=10)
+    evaluation_observer = EvaluationObserver(output_directory=output_directory, step=1)
 
 
-
-    algorithm = EvolutionStrategy(
+    # IN geneticAlgorithm Selection methon is set by dafult to BinaryTournamentSelection(ObjectiveComparator(0))
+    algorithm = GeneticAlgorithm(
         population_evaluator=MultiprocessEvaluator(8),
         problem=problem,
-        mu=10, #population_size
-        lambda_=10, #offspring_population_size
-        elitist=True,
-        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables()),
+        population_size=100,
+        offspring_population_size=100,
+        mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables(), distribution_index=5),
+        crossover=IntegerSBXCrossover(probability=1.0, distribution_index=10),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
-    
+    lower_bound = [1, 32, 0, 1, 0, 0, 0, 0, 1]
+    upper_bound = [5, 128, 2, 100, 2, 3, 2, 1, 5] 
 
+    new_solution = IntegerSolution(lower_bound, upper_bound, 1, 9)
+    new_solution.variables = [2, 64, 0, 1, 0, 3, 1, 0, 1]
+    algorithm.create_initial_solutions = (lambda : [algorithm.population_generator.new(problem) for _ in range(algorithm.population_size-1)] + [new_solution])
     
     algorithm.observable.register(evaluation_observer)
     
@@ -188,6 +213,14 @@ if __name__ == "__main__":
     print("Solution: " + str(result.variables[0]))
     print("Fitness:  " + str(result.objectives[0]))
     print("Computing time: " + str(algorithm.total_computing_time))
+
+    output_info_path = os.path.join(output_directory, "results_info.txt")
+    with open(output_info_path, 'w') as file:
+        file.write(f"Algorithm: {algorithm.get_name()}\n")
+        file.write(f"Problem: {problem.name()}\n")
+        file.write("Solution: " + str(result.variables[0]) + "\n")
+        file.write("Fitness:  " + str(result.objectives[0]) + "\n")
+        file.write("Computing time: " + str(algorithm.total_computing_time) + "\n")
 
     evaluation_observer.save_to_file()
     evaluation_observer.plot_evaluations()

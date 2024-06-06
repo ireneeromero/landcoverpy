@@ -29,7 +29,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         """
 
         estructura:
-        x1 = número de capas: [0, 5]
+        x1 = número de capas: [1, 5]
         x2 = número de nueronas por capa: [12, 64]
         x3 = funcion de activación: '0: Relu', '1: sigmoid', '2: tanh'
 
@@ -39,10 +39,11 @@ class NeuralNetworkOptimizer(IntegerProblem):
         x6 = Regularización: 0: L1, 1: L2, 2:L1L2, 3: None
         x7 = Inicialización de pesos: 0: 'He', 1: 'Glorot', 2: 'uniform'
         x8 = Dropout: 0: Yes, 1: No
+        x9 = ValorDropout [0.1, 0.5]
     
         """
-        self.lower_bound = [1, 12, 0, 1, 0, 0, 0, 0]
-        self.upper_bound = [5, 64, 2, 100, 2, 3, 2, 1] 
+        self.lower_bound = [1, 32, 0, 1, 0, 0, 0, 0, 1]
+        self.upper_bound = [5, 128, 2, 100, 2, 3, 2, 1, 5] 
 
         
         self.obj_directions = [self.MAXIMIZE]
@@ -67,6 +68,7 @@ class NeuralNetworkOptimizer(IntegerProblem):
         regularization_index = solution.variables[5]
         weight_initialization = solution.variables[6]
         dropout = solution.variables[7]
+        dropout_value = solution.variables[8]/10
 
         X_train = self.X_train
         X_test = self.X_test
@@ -74,13 +76,15 @@ class NeuralNetworkOptimizer(IntegerProblem):
         y_test = self.y_test
 
 
-        # Inicialización de pesos
-        if weight_initialization == 0:
-            initializer = HeNormal()
-        elif weight_initialization == 1:
-            initializer = GlorotUniform()
-        else:
-            initializer = 'uniform' 
+
+        initializer_functions = {
+            0: 'he_normal',
+            1: 'glorot_uniform',
+            2: 'random_uniform'
+        }
+        initializer = initializer_functions[weight_initialization]
+
+
 
         # Función de activación
         activation_functions = {
@@ -122,20 +126,15 @@ class NeuralNetworkOptimizer(IntegerProblem):
         model.add(Input(shape=(X_train.shape[1],)))
     
         for _ in range(n_layers):
-            if weight_initialization == 0:
-                initializer = HeNormal()
-            elif weight_initialization == 1:
-                initializer = GlorotUniform()
-            else:
-                initializer = 'uniform' 
+             
             if regularization == 'None':
                 model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer))
             else:
                 model.add(Dense(n_neurons, activation=activation_func, kernel_initializer=initializer, kernel_regularizer=regularization))
             if dropout == 0:
-                model.add(Dropout(0.2)) 
+                model.add(Dropout(dropout_value)) 
 
-       
+                
         # Capa de salida
         model.add(Dense(9, activation='softmax'))
         
@@ -143,8 +142,8 @@ class NeuralNetworkOptimizer(IntegerProblem):
         
         model.summary()
 
-        early_stopping = EarlyStopping(monitor='val_loss', patience=20, mode='min', verbose=1,)
-        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+        early_stopping = EarlyStopping(monitor='val_loss', patience=7, mode='min', verbose=1,)
+        model.fit(X_train, y_train, epochs=20, batch_size=32, validation_split=0.15, callbacks=[early_stopping])
 
         mapping = {
             "builtUp": 1,
@@ -165,9 +164,8 @@ class NeuralNetworkOptimizer(IntegerProblem):
         y_pred = [list(mapping.keys())[list(mapping.values()).index(idx)] for idx in y_pred]
         
         accuracy = accuracy_score(y_test, y_pred)
-        print("metrica", accuracy)
-        print("SDFGHJKILO")
-        print("vhjklñ")
+        print("accuracy", accuracy)
+        
         
         solution.objectives[0] = -1*accuracy
 
