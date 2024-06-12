@@ -204,7 +204,7 @@ if __name__ == "__main__":
     # upper_bound = [5, 128, 2, 100, 2, 3, 2, 1, 5] 
 
     # new_solution = IntegerSolution(lower_bound, upper_bound, 1, 9)
-    # new_solution.variables = [2, 64, 0, 1, 0, 3, 1, 0, 1]
+    # new_solution.variables = [2, 64, 0, 1, 0, 3, 1, 1, 1]
     # algorithm.create_initial_solutions = (lambda : [algorithm.population_generator.new(problem) for _ in range(algorithm.population_size-1)] + [new_solution])
     ##############################################################################################
     
