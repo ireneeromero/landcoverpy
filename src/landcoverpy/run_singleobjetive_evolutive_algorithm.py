@@ -65,13 +65,13 @@ class EvaluationObserver(Observer):
                 self.save_to_file()
 
     def save_to_file(self) -> None:
-        eval_file_path = os.path.join(self.directory, f"evaluations_{self.counter}.txt")
+        eval_file_path = os.path.join(self.directory, f"evaluations.txt")
         with open(eval_file_path, 'w') as f:
             for eval in self.all_evaluations:
                 f.write(f"{-1 * eval}\n")
         print(f"Saved evaluations to {eval_file_path}")
 
-        ind_file_path = os.path.join(self.directory, f"individuals_{self.counter}.txt")
+        ind_file_path = os.path.join(self.directory, f"individuals.txt")
         with open(ind_file_path, 'w') as f:
             for ind in self.all_individuals:
                 f.write(f"{ind}\n")
@@ -87,6 +87,7 @@ class EvaluationObserver(Observer):
         plt.savefig(os.path.join(self.directory, 'evaluation_plot.png'))
       
 if __name__ == "__main__":
+    print("settings.MINIO_DATA_FOLDER_NAME", settings.MINIO_DATA_FOLDER_NAME)
 
     X_train_dataset = "x_train.csv"
     X_train_dataset_path = join(settings.TMP_DIR, X_train_dataset)
@@ -131,25 +132,31 @@ if __name__ == "__main__":
     X_test = pd.read_csv(X_test_dataset_path)
     y_train = pd.read_csv(y_train_dataset_path)
     y_test = pd.read_csv(y_test_dataset_path)
-##############################3333 to balanced ###############33
-    train_df = pd.concat([X_train, y_train], axis=1)
 
-    num_samples = 2600
-    undersampled_dfs = []
 
-    for class_name in train_df['class'].unique():
-        class_df = train_df[train_df['class'] == class_name]
-        undersampled_class_df = class_df.sample(n=num_samples, random_state=42)
-        undersampled_dfs.append(undersampled_class_df)
 
-    train_resampled_df = pd.concat(undersampled_dfs)
+##############################TO RUN BALANCED DATA UNCOMMENT THIS ###############
+    # train_df = pd.concat([X_train, y_train], axis=1)
+
+    # num_samples = 2600
+    # undersampled_dfs = []
+
+    # for class_name in train_df['class'].unique():
+    #     class_df = train_df[train_df['class'] == class_name]
+    #     undersampled_class_df = class_df.sample(n=num_samples, random_state=42)
+    #     undersampled_dfs.append(undersampled_class_df)
+
+    # train_resampled_df = pd.concat(undersampled_dfs)
     
-    X_train = train_resampled_df.drop('class', axis=1)
-    y_train = train_resampled_df['class']
+    # X_train = train_resampled_df.drop('class', axis=1)
+    # y_train = train_resampled_df['class']
 
-    print(y_train.value_counts())
+    # print(y_train.value_counts())
 ###############################################################################3
-    #y_train = y_train['class']
+    
+    
+    
+    y_train = y_train['class'] # To run with balanced data comment this line
     y_test = y_test['class']
 
 
@@ -174,29 +181,33 @@ if __name__ == "__main__":
     problem = NeuralNetworkOptimizer(X_train, X_test, y_train, y_test)
     print("problem.number_of_variables", problem.number_of_variables())
 
-    max_evaluations = 10000
+    max_evaluations = 100
     
     output_directory = "output_directory_path"  # Define la ruta de tu directorio de salida
     evaluation_observer = EvaluationObserver(output_directory=output_directory, step=1)
 
 
-    # IN geneticAlgorithm Selection methon is set by dafult to BinaryTournamentSelection(ObjectiveComparator(0))
+    # In geneticAlgorithm Selection methon is set by dafult to BinaryTournamentSelection(ObjectiveComparator(0))
     algorithm = GeneticAlgorithm(
         population_evaluator=MultiprocessEvaluator(8),
         problem=problem,
-        population_size=100,
-        offspring_population_size=100,
+        population_size=10,
+        offspring_population_size=10,
         mutation=IntegerPolynomialMutation(probability=1.0 / problem.number_of_variables(), distribution_index=5),
         crossover=IntegerSBXCrossover(probability=1.0, distribution_index=10),
         termination_criterion=StoppingByEvaluations(max_evaluations=max_evaluations),
     )
 
-    lower_bound = [1, 32, 0, 1, 0, 0, 0, 0, 1]
-    upper_bound = [5, 128, 2, 100, 2, 3, 2, 1, 5] 
+    ###### To introduce a known solution to the algorithm, uncomment the following lines ######
 
-    new_solution = IntegerSolution(lower_bound, upper_bound, 1, 9)
-    new_solution.variables = [2, 64, 0, 1, 0, 3, 1, 0, 1]
-    algorithm.create_initial_solutions = (lambda : [algorithm.population_generator.new(problem) for _ in range(algorithm.population_size-1)] + [new_solution])
+    # lower_bound = [1, 32, 0, 1, 0, 0, 0, 0, 1]
+    # upper_bound = [5, 128, 2, 100, 2, 3, 2, 1, 5] 
+
+    # new_solution = IntegerSolution(lower_bound, upper_bound, 1, 9)
+    # new_solution.variables = [2, 64, 0, 1, 0, 3, 1, 0, 1]
+    # algorithm.create_initial_solutions = (lambda : [algorithm.population_generator.new(problem) for _ in range(algorithm.population_size-1)] + [new_solution])
+    ##############################################################################################
+    
     
     algorithm.observable.register(evaluation_observer)
     
@@ -205,8 +216,8 @@ if __name__ == "__main__":
 
 
     # Save results to file
-    print_function_values_to_file(result, "FUN." + algorithm.label)
-    print_variables_to_file(result, "VAR." + algorithm.label)
+    print_function_values_to_file(result, output_directory+ "/FUN." + algorithm.label+".txt")
+    print_variables_to_file(result, output_directory + "/VAR." + algorithm.label+".txt")
 
     print(f"Algorithm: {algorithm.get_name()}")
     print(f"Problem: {problem.name()}")

@@ -157,6 +157,7 @@ def _compute_matrix(
 
     fig, ax1 = plt.subplots(figsize=figsize)
 
+
     ax = sn.heatmap(
         df_cm,
         annot=annot,
@@ -184,6 +185,7 @@ def _compute_matrix(
 
     # iter in text elements
     array_df = np.array(df_cm.to_records(index=False).tolist())
+
     text_add = []
     text_del = []
     posi = -1  # from left to right, bottom to top
@@ -224,6 +226,7 @@ def compute_confusion_matrix(y_true, y_test, labels, out_image_path):
 
     df_cm = pd.DataFrame(confusion_matrix(y_true, y_test, labels=labels))
 
+ 
     # Save the matrix in csv format in case it is needed (is not uploaded to MinIO)
 
     df_cm.columns = labels
