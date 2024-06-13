@@ -1,26 +1,29 @@
-# LandCoverPy, a scalable land cover classification workflow
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7462308.svg)](https://doi.org/10.5281/zenodo.7462308)
+# AutoML for land cover classification using satellite earth observation products: application to environmental environments in Andalusia.
 
-A scalable land cover classification workflow aimed to be able to scale to cover the Mediterranean bassin.
 
-A research article describing the methodology followed on this workflow can be found at:
+## Install dependencies
 
-> **Scalable approach for high-resolution land cover: a case study in the Mediterranean Basin.**
-> 
-> Antonio Manuel Burgueño, José F. Aldana-Martín, María Vázquez-Pendón, Cristóbal Barba-González, Yaiza Jiménez Gómez, Virginia García Millán & Ismael Navas-Delgado
-> 
-> Journal of Big Data 10, 91 (2023). doi: [10.1186/s40537-023-00770-z](https://doi.org/10.1186/s40537-023-00770-z)
+```sh
+cd lancoverpy
+pip install -e .
+```
 
-## Installation
-From PyPi:
-`$ python -m pip install landcoverpy`
+## To run evolutive algorithm run this command:
 
-From source:
-`$ make install`
+Within this file you can modify the size of the population or the number of evaluations, you can also modify the name of the folder with the output files.
 
-## Usage
+```sh
+python /src/landcoverpy/run_singleobjetive_evolutive_algorithm.py
+```
 
-Usage examples can be found at the [notebooks](notebooks) folder.
+ ## To train the base/calculated nueronal network and/or the network obtained from doing RF
+
+Execute the function you need. You can also generate a tile classification using models obtained by RF and the neural network. 
+
+ ```sh
+python /src/tfm/main.py
+```
+
 
 ## License
 This project is licensed under the MIT license. See the [LICENSE](LICENSE) file for more info.
